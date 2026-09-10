@@ -2,9 +2,11 @@
 ### Project Charter
 
 **Author:** Noah Lopez
-**Start Date:** May 17, 2026
-**Target Completion:** July 31, 2026
+**Start Date:** September 9, 2026
+**Target Completion:** November 23, 2026
 **Status:** Active
+
+*(Originally chartered May 17, 2026; timeline rebased September 9, 2026 after the project sat unstarted for several months.)*
 
 ---
 
@@ -144,14 +146,14 @@ The project is considered complete and successful when **all** of the following 
 
 | Phase | Dates | Deliverable |
 |---|---|---|
-| **0. Planning** | May 17 – May 24 | Charter, architecture diagram, repo skeleton, ADRs |
-| **1. Infrastructure** | May 25 – May 31 | Supabase + GitHub + Python env operational |
-| **2. Ingestion (Bronze)** | Jun 1 – Jun 14 | Python ingestion scripts, raw data flowing |
-| **3. Modeling (Silver/Gold)** | Jun 15 – Jun 28 | dbt project with full test coverage |
-| **4. Orchestration** | Jun 29 – Jul 5 | Scheduled GitHub Actions, monitoring |
-| **5. Data Science** | Jul 6 – Jul 19 | Anomaly detection models, predictions table |
-| **6. Visualization** | Jul 20 – Jul 26 | Tableau dashboard + Streamlit app live |
-| **7. Showcase** | Jul 27 – Jul 31 | README polish, architecture diagram, blog post |
+| **0. Planning** | Sep 9 – Sep 16 | Charter, architecture diagram, repo skeleton, ADRs |
+| **1. Infrastructure** | Sep 17 – Sep 23 | Supabase + GitHub + Python env operational |
+| **2. Ingestion (Bronze)** | Sep 24 – Oct 7 | Python ingestion scripts, raw data flowing |
+| **3. Modeling (Silver/Gold)** | Oct 8 – Oct 21 | dbt project with full test coverage |
+| **4. Orchestration** | Oct 22 – Oct 28 | Scheduled GitHub Actions, monitoring |
+| **5. Data Science** | Oct 29 – Nov 11 | Anomaly detection models, predictions table |
+| **6. Visualization** | Nov 12 – Nov 18 | Tableau dashboard + Streamlit app live |
+| **7. Showcase** | Nov 19 – Nov 23 | README polish, architecture diagram, blog post |
 
 ---
 

@@ -1,0 +1,17 @@
+name: 'market_intelligence_platform'
+version: '1.0.0'
+config-version: 2
+
+profile: 'market_intelligence_platform'
+
+model-paths: ["models"]
+test-paths: ["tests"]
+
+models:
+  market_intelligence_platform:
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: view
+    marts:
+      +materialized: table

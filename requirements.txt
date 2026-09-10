@@ -1,0 +1,11 @@
+yfinance
+fredapi
+pandas
+sqlalchemy
+psycopg2-binary
+python-dotenv
+dbt-postgres
+scikit-learn
+pytest
+streamlit
+plotly
