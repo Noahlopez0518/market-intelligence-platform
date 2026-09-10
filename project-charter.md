@@ -3,10 +3,10 @@
 
 **Author:** Noah Lopez
 **Start Date:** September 9, 2026
-**Target Completion:** November 23, 2026
+**Target Completion:** November 27, 2026
 **Status:** Active
 
-*(Originally chartered May 17, 2026; timeline rebased September 9, 2026 after the project sat unstarted for several months.)*
+*(Originally chartered May 17, 2026 as a pure portfolio piece; timeline rebased September 9, 2026 after the project sat unstarted for several months; scope re-pivoted September 9, 2026 to a personal decision-support tool — see Section 2. Full architecture, math methodology, and security design live in [docs/architecture.md](docs/architecture.md); granular milestones and to-dos live in [docs/roadmap.md](docs/roadmap.md).)*
 
 ---
 
@@ -20,26 +20,40 @@ The project demonstrates the complete data lifecycle — ingestion, modeling, or
 
 ## 2. Business Problem
 
-Investors and analysts face a recurring question: **"Is this stock fairly priced relative to its peers?"**
+**This is a personal tool, built for Noah, to support his own stock-buying decisions.** It has one real user.
 
-Traditional stock screeners compare absolute metrics (P/E ratio, market cap) without accounting for sector context. A P/E of 30 is expensive for a utility company but cheap for a high-growth tech firm. This platform answers the question correctly by evaluating each stock against its own sector cohort and flagging statistical outliers.
+Today, deciding whether to buy or add to a position is ad hoc — checking a handful of metrics one at a time across different sites, with no systematic way to see how a stock actually compares to its real peers, and no way to be told when something on a watchlist changes enough to be worth a second look. This platform replaces that manual process with three concrete capabilities:
+
+1. **Screen** — rank the S&P 500 by how statistically out of line each stock is with its own GICS sector, so there's a shortlist worth researching instead of 500 names to eyeball.
+2. **Monitor** — track a private watchlist and get alerted, privately, when something on it moves enough to matter.
+3. **Compare** — pick a small set of candidates and see them side by side on the same sector-relative terms.
+
+**Guardrail:** the tool stays descriptive, never prescriptive. It answers "how does this compare, and what changed" — it never outputs "buy" or "sell." Noah makes every decision; the tool just makes the inputs to that decision faster and more consistent than doing it by hand. (This also keeps the project on the right side of the "no personalized financial advice" line — a tool that surfaces data for its owner to interpret is meaningfully different from a system that issues recommendations.)
 
 ---
 
 ## 3. Primary Objectives
 
-1. **Detect anomalies** — Identify S&P 500 stocks that are statistically mispriced relative to their GICS sector peers using z-score and isolation forest methods.
-2. **Provide context** — Layer in sector rotation analysis to explain *why* a stock may be moving against its peers.
-3. **Deliver reliability** — Build the platform with idempotent pipelines, automated testing, and scheduled refreshes so insights are current and trustworthy.
-4. **Showcase craft** — Document every architectural decision, publish all code openly, and produce a portfolio piece that demonstrates senior-level data engineering thinking.
+1. **Screen** — Identify S&P 500 stocks that are statistically mispriced relative to their GICS sector peers using a robust z-score plus isolation forest, ranked and with each flag traceable to the metric(s) that drove it.
+2. **Monitor** — Track a private watchlist; detect and privately alert on meaningful changes (valuation gap shift, sector rotation, earnings surprise) without that data or those alerts ever touching the public repo.
+3. **Compare** — Given 2–5 user-selected tickers, produce an ad hoc, sector-normalized side-by-side comparison — no persistence needed, safe to expose publicly.
+4. **Provide context** — Layer in sector rotation analysis to explain *why* a stock may be moving against its peers.
+5. **Deliver reliability** — Build the platform with idempotent pipelines, automated testing, and scheduled refreshes so insights are current and trustworthy.
+6. **Showcase craft** — Document every architectural decision, publish the generic code openly, and produce a portfolio piece — secondary to objective 1–3, but free as a byproduct of building this properly.
 
 ---
 
-## 4. Headline Insight
+## 4. Headline Questions
 
-> **"Which S&P 500 stocks are currently trading at the largest valuation gap from their sector peers, and which sectors are driving the divergence?"**
+The platform exists to answer three questions on demand:
 
-This question is answered daily by the platform and presented as the lead metric on the public Tableau dashboard.
+> **Screen:** "Which S&P 500 stocks are trading at the largest valuation gap from their sector peers right now, and why?"
+>
+> **Monitor:** "Has anything on my watchlist changed enough today that I should look at it?"
+>
+> **Compare:** "Of these specific stocks I'm considering, which is priced better relative to its own peers?"
+
+Screen and Compare are answered by the public Streamlit app and Tableau dashboard. Monitor is answered privately — see [Section 5](#5-scope) and [docs/architecture.md](docs/architecture.md#security--the-publicprivate-split).
 
 ---
 
@@ -52,16 +66,22 @@ This question is answered daily by the platform and presented as the lead metric
 - Quarterly earnings history
 - Macro indicators (10Y Treasury yield, Fed Funds rate, CPI) for context
 - ~5 years of historical data at launch, with daily incremental refresh
-- Anomaly detection at the stock-vs-sector level
+- Anomaly detection at the stock-vs-sector level (Screen)
 - Sector rotation analysis at the index level
+- Ad hoc side-by-side comparison of 2–5 user-selected tickers (Compare) — no persistence, public-safe
+- A private watchlist of tickers Noah is tracking (Monitor) — private data, never committed to the repo
+- Private change-detection alerting on the watchlist (email, not a public channel)
 
 ### Out of Scope
 - International equities
 - Options, futures, crypto, fixed income
 - Intraday or real-time data
 - Predictive forecasting (we describe what *is* unusual, not what *will* happen)
-- Trading recommendations or financial advice
+- Trading recommendations or financial advice — the tool never outputs "buy" or "sell"
 - Sentiment analysis from news or social media (potential v2)
+- Brokerage integration or automated trade execution
+- Storing real position size, cost basis, or brokerage account data
+- Any public exposure of the private watchlist, its contents, or its alert history
 
 ---
 
@@ -74,9 +94,11 @@ The project is considered complete and successful when **all** of the following 
 | 1 | Pipeline runs end-to-end without manual intervention | Daily scheduled GitHub Actions run completes successfully for 7 consecutive days |
 | 2 | Data quality is enforced | 100% of dbt tests pass on every run; failures trigger alerts |
 | 3 | Anomaly model produces interpretable results | Each flagged stock includes the metric, z-score, and sector benchmark |
-| 4 | Dashboards are publicly accessible | Tableau Public dashboard and Streamlit app both live with public URLs |
+| 4 | Public-safe features are publicly accessible | Tableau dashboard and Streamlit app (Screen + Compare only) live with public URLs |
 | 5 | Repository is portfolio-ready | Public GitHub repo with README, architecture diagram, ADRs, and demo links |
 | 6 | Documentation is complete | Every component has a written explanation of *what* it does and *why* it was chosen |
+| 7 | Monitor works for its one real user | Noah can add a ticker to his private watchlist and receive a private email alert when it changes meaningfully |
+| 8 | Public/private boundary holds | Zero watchlist tickers, alert content, or personal holdings ever appear in the public repo, its commit history, or public Action logs |
 
 ---
 
@@ -100,6 +122,8 @@ The project is considered complete and successful when **all** of the following 
 ---
 
 ## 8. Architecture Overview
+
+Quick-reference diagram below; the full flowchart (with the public/private split), the math methodology behind Screen/Monitor/Compare, and the security design live in **[docs/architecture.md](docs/architecture.md)**.
 
 ```
 ┌─────────────────────┐
@@ -144,16 +168,18 @@ The project is considered complete and successful when **all** of the following 
 
 ## 9. Project Phases & Timeline
 
+See [docs/roadmap.md](docs/roadmap.md) for the granular milestone- and task-level breakdown. Phase-level summary:
+
 | Phase | Dates | Deliverable |
 |---|---|---|
-| **0. Planning** | Sep 9 – Sep 16 | Charter, architecture diagram, repo skeleton, ADRs |
-| **1. Infrastructure** | Sep 17 – Sep 23 | Supabase + GitHub + Python env operational |
-| **2. Ingestion (Bronze)** | Sep 24 – Oct 7 | Python ingestion scripts, raw data flowing |
-| **3. Modeling (Silver/Gold)** | Oct 8 – Oct 21 | dbt project with full test coverage |
-| **4. Orchestration** | Oct 22 – Oct 28 | Scheduled GitHub Actions, monitoring |
-| **5. Data Science** | Oct 29 – Nov 11 | Anomaly detection models, predictions table |
-| **6. Visualization** | Nov 12 – Nov 18 | Tableau dashboard + Streamlit app live |
-| **7. Showcase** | Nov 19 – Nov 23 | README polish, architecture diagram, blog post |
+| **0. Planning** | Sep 9 – Sep 16 | Charter, architecture doc, math methodology, roadmap, flowchart, ADRs |
+| **1. Infrastructure** | Sep 17 – Sep 23 | Supabase (public schema + private schema) + GitHub + Python env operational |
+| **2. Ingestion (Bronze)** | Sep 24 – Oct 7 | Python ingestion scripts, raw data flowing, watchlist table created |
+| **3. Modeling (Silver/Gold)** | Oct 8 – Oct 21 | dbt project with full test coverage, composite valuation-gap marts |
+| **4. Orchestration** | Oct 22 – Oct 28 | Scheduled GitHub Actions, pipeline monitoring, private watchlist-monitor job |
+| **5. Data Science** | Oct 29 – Nov 11 | z-score + isolation forest models, validated against hand-picked known examples |
+| **6. Visualization** | Nov 12 – Nov 22 | Tableau + public Streamlit (Screen, Compare) live; private companion repo for Monitor alerts |
+| **7. Showcase** | Nov 23 – Nov 27 | README polish, architecture diagram, blog post |
 
 ---
 
@@ -163,9 +189,12 @@ The project is considered complete and successful when **all** of the following 
 |---|---|---|---|
 | `yfinance` API changes or rate limits | Medium | Medium | Build retry logic; have FRED as backup macro source |
 | Supabase free tier limits (500MB) hit | Low | High | Aggressively partition historical data; archive >5yr to Parquet |
-| Scope creep extends timeline past July | High | Medium | Strict phase gates; defer v2 features to backlog |
+| Scope creep extends timeline past Nov 27 | High | Medium | Strict phase gates; defer v2 features to backlog |
 | Tableau learning curve slows Phase 6 | Medium | Low | Allocate buffer week; YouTube tutorials in advance |
 | ML model produces noisy or unconvincing results | Medium | High | Use multiple methods (z-score + isolation forest); validate against known historical anomalies |
+| Composite score doesn't feel actionable for a real personal buy decision | Medium | High | Validate against a small hand-picked set of stocks Noah already has a strong opinion on before trusting the output; treat as directional, not authoritative |
+| Personal watchlist/alert data leaks into the public repo (commits, Action logs, public issues) | Medium | High | Hard split: private data lives only in Noah's own Supabase schema + a private companion repo for alerting; public repo never references specific tickers Noah is tracking — see [ADR 0002](docs/adr/0002-public-demo-vs-private-personal-data.md) |
+| Scope grew (Monitor + Compare added) without extending the timeline | High | Medium | Target completion moved from Nov 23 to Nov 27; phase gates still strict, v2 backlog absorbs anything further |
 
 ---
 
@@ -182,13 +211,15 @@ The project is considered complete and successful when **all** of the following 
 
 ## 12. Definition of Done
 
-The project is **done** when a hiring manager can:
-1. Click the GitHub repo link
-2. Read a README that explains the project in 60 seconds
-3. View a live Tableau dashboard with current data
-4. View a live Streamlit app with interactive exploration
-5. Read an architecture diagram and ADRs explaining every design choice
-6. See a clean commit history showing the project evolved professionally
+The project is **done** when both of these are true:
+
+**For its real user (primary):**
+1. Noah can add a ticker to his private watchlist and, without touching code, get told privately when it's worth a look
+2. Noah can pull up 2–5 tickers he's actually considering and see a side-by-side comparison that's faster than doing it by hand
+3. The Screen shortlist has been checked against a handful of stocks Noah already has a strong opinion on, and it agrees often enough to be trusted directionally
+
+**For the portfolio (secondary, free byproduct):**
+4. A hiring manager can click the GitHub repo link, read a README that explains the project in 60 seconds, view the live Tableau dashboard and Streamlit app (Screen + Compare), and read an architecture diagram and ADRs explaining every design choice — including *why* the personal watchlist data never appears in any of it
 
 ---
 
