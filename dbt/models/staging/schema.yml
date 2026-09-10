@@ -1,0 +1,18 @@
+# Template for generic dbt tests on staging models — copy this pattern for
+# each real model added in Phase 2/3. Replace `stg_example` with the actual
+# model name once it exists; this file intentionally has no models yet.
+#
+# version: 2
+#
+# models:
+#   - name: stg_example
+#     columns:
+#       - name: id
+#         tests:
+#           - unique
+#           - not_null
+#       - name: sector
+#         tests:
+#           - not_null
+#           - accepted_values:
+#               values: ['Technology', 'Healthcare', 'Financials', '...']

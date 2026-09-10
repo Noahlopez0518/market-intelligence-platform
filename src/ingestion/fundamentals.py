@@ -1,1 +1,1 @@
-"""Company fundamentals ingestion (sector, industry, market cap, P/E, EPS, dividend yield). Phase 2."""
+"""Company fundamentals ingestion: sector, industry, market cap, P/E, EPS, yield. Phase 2."""
