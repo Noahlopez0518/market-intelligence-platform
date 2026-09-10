@@ -18,14 +18,16 @@ flowchart TD
         BRONZE[(Bronze — raw<br/>Supabase Postgres)]
         SILVER[(Silver — cleaned<br/>dbt staging/intermediate)]
         GOLD[(Gold — marts<br/>valuation-gap + anomaly scores)]
-        SCREEN[Screen engine<br/>z-score + isolation forest]
-        COMPARE[Compare engine<br/>ad hoc, query-time only]
-        APP[Public Streamlit App<br/>Screen + Compare tabs]
+        REPO[Repository layer<br/>src/repositories]
+        DOMAIN[Domain + scoring engine<br/>src/domain — pure, no I/O]
+        SVC[Service layer<br/>src/services]
+        API[FastAPI backend<br/>src/api — /screen /compare /score]
+        APP[Streamlit App<br/>API client only, no DB access]
         TABLEAU[Tableau Public Dashboard]
     end
 
     subgraph PrivateRepo["PRIVATE — Noah's own infra, not in this repo"]
-        WLDB[(Watchlist table<br/>private Supabase schema)]
+        WLDB[(Watchlist table<br/>tiny — ticker + last-seen score)]
         MONITOR[Watchlist Monitor job<br/>private scheduled Action]
         EMAIL[Private email alert]
     end
@@ -33,12 +35,13 @@ flowchart TD
     YF --> ING
     FRED --> ING
     ING --> BRONZE --> SILVER --> GOLD
-    GOLD --> SCREEN --> APP
-    GOLD --> COMPARE --> APP
+    GOLD --> REPO --> SVC
+    DOMAIN --> SVC
+    SVC --> API --> APP
     GOLD --> TABLEAU
 
-    GOLD -. read-only, generic query .-> MONITOR
     WLDB --> MONITOR
+    MONITOR -->|HTTPS GET /score/ticker — public data only, no DB creds needed| API
     MONITOR -->|meaningful change detected| EMAIL
 
     style PrivateRepo fill:#2a2a2a,stroke:#888,stroke-dasharray: 5 5
@@ -47,7 +50,9 @@ flowchart TD
     style EMAIL fill:#552222
 ```
 
-**Why Monitor is drawn outside the public repo:** the gold-layer marts (sector medians, valuation gaps) are public data derived from public S&P 500 filings — safe to publish. The moment a specific ticker gets tagged "Noah is watching this," that's personal information about his actual investment research, and it must never land in a public commit, a public GitHub Issue, or a public Actions log (public repos expose Action run logs to anyone). See [Section 3](#3-security--the-publicprivate-split) for the full reasoning.
+**Why Monitor is drawn outside the public repo:** the gold-layer marts (sector medians, valuation gaps) are public data derived from public S&P 500 filings — safe to publish. The moment a specific ticker gets tagged "Noah is watching this," that's personal information about his actual investment research, and it must never land in a public commit, a public GitHub Issue, or a public Actions log (public repos expose Action run logs to anyone). See [Section 4](#4-security--the-publicprivate-split) for the full reasoning.
+
+**Why Monitor calls the API instead of the database directly:** this changed from the original design (see [ADR 0003](adr/0003-layered-architecture-and-api.md)). Monitor now only needs an HTTPS call to a public endpoint — it never touches Supabase credentials for market data at all. Its private secret surface shrinks to just email-sending credentials and its own tiny watchlist table. Less that could leak, because there's less private infrastructure to begin with.
 
 ---
 
@@ -105,7 +110,83 @@ Pure query-time computation, no persistence: for 2–5 user-selected tickers, pu
 
 ---
 
-## 3. Security — the public/private split
+## 3. Software architecture
+
+Sections 1–2 describe *what* gets computed and *what flows where*. This section describes *how the code is structured* — because "an ML script in a dbt project with a dashboard reading the database directly" and "a properly layered service" produce the same numbers but are not the same engineering artifact, and per [ADR 0003](adr/0003-layered-architecture-and-api.md) this project is meant to demonstrate both data engineering and software engineering.
+
+### 3.1 Layers
+
+```
+src/
+  domain/          Pure business logic: dataclasses/Pydantic models (Stock, SectorCohort,
+                    ValuationScore, AnomalyResult) and the ScoringEngine implementing the
+                    math in Section 2. Zero I/O — no DB, no network, no filesystem. Fully
+                    unit-testable with plain Python values in, plain Python values out.
+
+  repositories/     Data access. An interface (e.g. MarketDataRepository) plus a Postgres/
+                    Supabase implementation. Isolates SQL specifics from business logic;
+                    swappable for an in-memory fake in unit tests.
+
+  services/         Orchestration. ScreenService, CompareService — combine a repository
+                    (get the data) with the domain engine (score it) into what the API
+                    actually returns. No SQL here, no scoring math here — just wiring.
+
+  api/              FastAPI app. Routers, Pydantic request/response schemas, dependency
+                    injection for repositories/services. This is the only thing that
+                    talks HTTP.
+
+  ingestion/        Extract + load scripts (Bronze). A separate concern from the
+                    application layers above — unchanged from the original scaffold.
+
+  utils/            Shared helpers (DB connection, config loading).
+
+dbt/                Silver/Gold SQL transforms — the repository layer reads from what
+                    dbt produces here. dbt still owns bulk set-based transformation;
+                    Python owns anything better expressed as an algorithm (the ML models,
+                    the API).
+
+tests/
+  unit/             domain/ and services/, with repositories mocked or faked — no
+                    network, no real database, fast and deterministic. This is where the
+                    "hand-check the math" validation from Phase 0 becomes permanent: real
+                    pinned input → expected z-score/anomaly output, not a one-time
+                    spreadsheet check that gets thrown away.
+  integration/      Repository implementations against a real (test) Postgres schema, and
+                    API endpoints end-to-end via FastAPI's TestClient.
+
+streamlit_app/      A thin client. Calls the FastAPI backend over HTTP. No direct database
+                    access, no business logic — if the scoring math needs to change, it
+                    changes in src/domain once, not in Streamlit and dbt and a notebook
+                    separately.
+```
+
+### 3.2 Why layered instead of scripts + dashboard
+
+- **Testability.** The scoring math is the highest-risk part of this project (charter risk: "composite score doesn't feel actionable"). Pure functions in `src/domain` can be pinned with real test cases and run in milliseconds in CI — no flaky network dependency, no test database needed just to check that a z-score formula is implemented correctly.
+- **One implementation, several consumers.** Streamlit, Tableau (via the gold marts dbt produces), and the private Monitor job (via the API) all reach the same numbers through the same code path. There's no way for "the dashboard's math" and "the alert's math" to quietly drift apart, because there's only one math.
+- **A smaller, safer private repo.** Monitor becomes an API client instead of a database client — see the note in Section 1. This is a direct consequence of this decision, not a separate one.
+- **A demo-able backend, not just a dashboard.** FastAPI ships interactive API docs (`/docs`) for free. A hiring manager — or Noah, six months from now — can hit a live endpoint and read the schema, which is a distinct signal from "here's a Streamlit page."
+
+### 3.3 Testing strategy
+
+- **Unit tests** (`tests/unit/`): domain models and services, repositories mocked/faked. No I/O. This is the bulk of the suite and the fastest to run.
+- **Integration tests** (`tests/integration/`): real repository implementations against a test schema, and API endpoints via `TestClient`. Fewer of these, run less often (not necessarily on every single local save, but always in CI).
+- **Type hints throughout**, checked by `mypy` in CI alongside `ruff` (see `.github/workflows/ci.yml`).
+- **Coverage tracked** via `pytest-cov`, reported but not gated at launch — a percentage target on day one with no code written yet just encourages testing trivial getters. Revisit once there's a real body of code to measure honestly.
+
+### 3.4 API contract (sketch — will firm up in Phase 5/6, not final)
+
+| Method | Path | Returns |
+|---|---|---|
+| `GET` | `/screen` | Ranked shortlist of sector-relative outliers (Screen) |
+| `GET` | `/compare?tickers=AAPL,MSFT,...` | Side-by-side comparison for 2–5 tickers (Compare) |
+| `GET` | `/score/{ticker}` | Latest composite score + anomaly score for one ticker — this is the endpoint the private Monitor job calls |
+
+**Open question, deferred to Phase 6 (see [roadmap.md](roadmap.md)):** where the API is hosted. It needs to be reachable over HTTPS by the private repo's scheduled job, not just co-located with Streamlit. Render or Fly.io free tiers are the leading candidates — decide when Phase 6 starts, not now, since the answer doesn't change anything about the code.
+
+---
+
+## 4. Security — the public/private split
 
 **Threat model, scoped honestly:** this isn't a multi-tenant system with other people's money or PII. The actual sensitive thing is narrow — *which tickers Noah is personally researching, and when he got alerted about them*. That's low-severity if leaked (not a password, not an SSN), but there's no reason to expose it either, and "no reason to expose it" is enough to keep it out of a public repo.
 
@@ -117,7 +198,7 @@ Pure query-time computation, no persistence: for 2–5 user-selected tickers, pu
 | Data | S&P 500 prices, fundamentals, macro indicators — all public information | Watchlist ticker list, alert history |
 | Compute | GitHub Actions (public repo → logs are public) | A separate private GitHub repo's Actions (private repo → logs are private), or run locally |
 | Alerting | Pipeline-failure alerts via public GitHub Issue (fine — "the ingestion job broke" has no personal content) | Watchlist-change alerts via **private email**, never a public issue or public log line |
-| Secrets | Supabase creds for the public schema, FRED key — GitHub Actions secrets, never committed | Supabase creds for the private schema, email-sending creds — a *different* set of secrets, in the private repo |
+| Secrets | Supabase creds, FRED key — GitHub Actions secrets, never committed | Its own tiny watchlist DB creds + email-sending creds only. **No Supabase market-data credentials at all** — Monitor reaches all market data through the public API (see [ADR 0003](adr/0003-layered-architecture-and-api.md)) |
 
 **Why a separate private repo instead of one repo with mixed visibility:** GitHub repo visibility is all-or-nothing for Actions logs — there's no way to make one workflow's logs private while the rest of the repo stays public. Splitting into two repos is the simplest mechanism that actually enforces the boundary, rather than relying on discipline ("just don't log the ticker") which fails the first time someone forgets. See [ADR 0002](adr/0002-public-demo-vs-private-personal-data.md) for the full decision record.
 

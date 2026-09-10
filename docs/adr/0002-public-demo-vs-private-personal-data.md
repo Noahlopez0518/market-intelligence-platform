@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted. Amended by [ADR 0003](0003-layered-architecture-and-api.md) — Monitor now reaches market data via the public API instead of direct Supabase credentials, shrinking the private repo's secret surface described below. The core decision (separate private repo, private email alerting) is unchanged.
 
 ## Context
 

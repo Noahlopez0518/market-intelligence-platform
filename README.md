@@ -6,18 +6,26 @@ A personal decision-support tool: ingests daily U.S. equity market data, transfo
 
 ## Stack
 
-Python (`yfinance`, `fredapi`) → Supabase (Postgres) → dbt Core → GitHub Actions → scikit-learn → Tableau Public / Streamlit
+Python (`yfinance`, `fredapi`) → Supabase (Postgres) → dbt Core → FastAPI → GitHub Actions → scikit-learn → Tableau Public / Streamlit
 
 ## Repo layout
 
 ```
 src/ingestion/     Python extract + load scripts (Bronze)
+src/domain/        Pure business logic + scoring engine — no I/O (Phase 5)
+src/repositories/  Data access, isolates SQL from business logic (Phase 3)
+src/services/      Orchestration layer (Phase 5)
+src/api/           FastAPI backend — /screen /compare /score (Phase 5)
 dbt/               staging / intermediate / marts models (Silver/Gold)
 notebooks/         exploratory analysis, versioned
-streamlit_app/     interactive exploration app
-docs/              setup guide, ADRs
+streamlit_app/     thin API client, no direct DB access (Phase 6)
+tests/unit/        domain + services, no I/O
+tests/integration/ API + repositories against a real test schema
+docs/              architecture, roadmap, setup guide, ADRs
 .github/workflows/ scheduled ingestion + CI
 ```
+
+*(The `src/domain`, `src/repositories`, `src/services`, and `src/api` layers don't exist yet — see [docs/roadmap.md](docs/roadmap.md) for when each lands.)*
 
 ## Docs
 

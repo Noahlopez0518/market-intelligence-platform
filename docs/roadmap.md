@@ -13,7 +13,8 @@ Granular milestones and to-dos underneath the phase table in [project-charter.md
 - [x] Write `docs/architecture.md` — flowchart, math methodology, security design
 - [x] Write ADR 0002 — public/private repo split
 - [x] Write this roadmap
-- [ ] Sanity-check the math methodology against 3–5 real S&P 500 stocks by hand (spreadsheet, not code) — confirm the robust z-score formula produces numbers that match intuition before any code gets written
+- [x] Decide layered architecture (`domain` / `repositories` / `services` / `api`) + FastAPI backend — `docs/architecture.md` §3, [ADR 0003](adr/0003-layered-architecture-and-api.md) — so the project demonstrates software engineering, not just data engineering
+- [ ] Sanity-check the math methodology against 3–5 real S&P 500 stocks by hand (spreadsheet, not code) — confirm the robust z-score formula produces numbers that match intuition; these hand-checked values become the pinned test cases for `tests/unit/domain/` in Phase 5, not a throwaway check
 - [ ] Decide final list of valuation metrics for v1 (P/E, P/B, EV/EBITDA, P/S proposed in architecture.md — confirm or trim)
 - [ ] Confirm GICS sector classification source (yfinance's `sector`/`industry` fields — verify coverage/accuracy for all ~500 tickers before relying on it)
 
@@ -30,6 +31,9 @@ Granular milestones and to-dos underneath the phase table in [project-charter.md
 - [ ] Request FRED API key, add to `.env` and Actions secrets
 - [ ] Confirm `requirements.txt` installs cleanly in the CI runner (already true as of the CI workflow, re-verify after any dependency additions)
 - [ ] `dbt debug` succeeds against the Supabase connection
+- [ ] Restructure `src/` into the layered skeleton (`domain/`, `repositories/`, `services/`, `api/`), add `tests/unit/` and `tests/integration/` — empty modules with the boundaries in place, no logic yet (architecture.md §3.1)
+- [ ] Add `fastapi`, `uvicorn`, `pydantic`, `httpx`, `mypy`, `pytest-cov` to `requirements.txt`
+- [ ] Add `mypy` check step to `.github/workflows/ci.yml`, alongside the existing `ruff` step
 
 ---
 
@@ -58,6 +62,8 @@ Granular milestones and to-dos underneath the phase table in [project-charter.md
 - [ ] dbt tests on every model per the pattern in `dbt/models/staging/schema.yml` — not_null/unique at minimum, `accepted_values` on sector
 - [ ] Confirm dbt test failures actually fail the CI/ingestion pipeline (charter Success Criterion #2)
 - [ ] `dbt docs generate` produces a browsable lineage graph, linked from the README
+- [ ] Build `src/repositories/` — `MarketDataRepository` interface + Supabase implementation reading the gold marts; add an in-memory fake implementation for unit tests
+- [ ] Integration tests (`tests/integration/`) for the repository against a real test schema — confirms the SQL side actually works before any business logic depends on it
 
 ---
 
@@ -68,18 +74,22 @@ Granular milestones and to-dos underneath the phase table in [project-charter.md
 - [ ] Chain ingestion → dbt run → dbt test into one scheduled workflow (or sequenced dependent jobs)
 - [ ] Confirm the failure-alert step (`daily-ingestion.yml`) fires correctly on a deliberately broken run
 - [ ] Run for 7 consecutive days without manual intervention (charter Success Criterion #1) — track pass/fail per day somewhere visible (even a simple log table)
-- [ ] Design (not yet build) the private watchlist-monitor job's scheduling — depends on Phase 3's gold marts existing and stable
+- [ ] Design (not yet build) the private watchlist-monitor job's scheduling — depends on the Phase 5 API being live, not just the gold marts existing
 
 ---
 
-## Phase 5 — Data Science (Oct 29 – Nov 11)
+## Phase 5 — Data Science + API (Oct 29 – Nov 11)
 
-**Milestone: Screen produces a ranked, explainable shortlist; the math has been checked against reality.**
+**Milestone: Screen produces a ranked, explainable shortlist; the math has been checked against reality; it's reachable over HTTP.**
 
-- [ ] Implement composite z-score scoring (architecture.md §2.1) as a dbt model or Python job writing to gold
-- [ ] Implement per-sector Isolation Forest (architecture.md §2.2), `scikit-learn`, `contamination=0.1` starting point
+- [ ] Build `src/domain/` — `Stock`, `SectorCohort`, `ValuationScore`, `AnomalyResult` models + `ScoringEngine` implementing composite z-score (architecture.md §2.1). Zero I/O.
+- [ ] Unit tests (`tests/unit/domain/`) — the Phase 0 hand-checked values become permanent pinned test cases, not a throwaway spreadsheet exercise
+- [ ] Implement per-sector Isolation Forest (architecture.md §2.2) inside `ScoringEngine`, `scikit-learn`, `contamination=0.1` starting point
 - [ ] Shortlist rule (architecture.md §2.3) — confirm every flagged stock carries its driving metric(s) in the output row
 - [ ] **Validation pass:** hand-pick 5–10 S&P 500 stocks Noah already has a strong opinion on (clearly overvalued, clearly cheap, clearly unremarkable) and confirm the model's output roughly agrees — this is the check against charter risk "composite score doesn't feel actionable"
+- [ ] Build `src/services/` — `ScreenService`, `CompareService` wiring the Phase 3 repository + this phase's domain engine
+- [ ] Build `src/api/` — FastAPI app: `/screen`, `/compare`, `/score/{ticker}` per the contract in architecture.md §3.4, Pydantic schemas, dependency injection
+- [ ] Integration tests (`tests/integration/api/`) via FastAPI's `TestClient`
 - [ ] Investigate earnings-estimate data source for Monitor's earnings-surprise trigger (architecture.md §2.4 — currently an open question, not yet resolved)
 - [ ] Tune shortlist thresholds (`|composite| > 2.0`, top-decile anomaly) based on how many stocks actually surface — too many or too few both indicate a miscalibrated threshold
 
@@ -89,14 +99,15 @@ Granular milestones and to-dos underneath the phase table in [project-charter.md
 
 **Milestone: Screen and Compare are live and public; Monitor is live and private.**
 
+- [ ] Choose free API hosting (Render or Fly.io — architecture.md §3.4) and deploy the FastAPI backend
 - [ ] Tableau Public account created, dashboard built against gold marts, published
 - [ ] Streamlit Community Cloud account created
-- [ ] `streamlit_app/` — Screen tab: ranked shortlist, filterable by sector, each row shows driving metric(s)
-- [ ] `streamlit_app/` — Compare tab: ticker multi-select (2–5), side-by-side table + chart, query-time only, no persistence
+- [ ] `streamlit_app/` — Screen tab: ranked shortlist, filterable by sector, each row shows driving metric(s) — calls the deployed API, no direct DB access
+- [ ] `streamlit_app/` — Compare tab: ticker multi-select (2–5), side-by-side table + chart, calls the deployed API, no persistence
 - [ ] Deploy public Streamlit app, confirm no personal data path exists in the deployed code (spot-check: grep the deployed repo for any hardcoded ticker list — there should be none)
 - [ ] Create the private companion repo (name TBD, not `market-intelligence-platform`)
-- [ ] Private repo: watchlist table in Noah's private Supabase schema, populated with real tickers (never committed anywhere)
-- [ ] Private repo: Monitor job — daily change-detection (architecture.md §2.4) reading gold marts read-only, writing nothing back to the public schema
+- [ ] Private repo: a small watchlist table (ticker + last-seen composite score) — this is the *only* private data store needed now that Monitor reads market data via the public API (ADR 0003), not Supabase directly
+- [ ] Private repo: Monitor job — calls `GET /score/{ticker}` on the public API for each watched ticker, compares to last-seen value, applies the change-detection rules (architecture.md §2.4)
 - [ ] Private repo: email alerting wired up (SMTP secret or a transactional email service), tested with a deliberate trigger
 - [ ] Confirm private repo's Actions logs are actually private (repo visibility setting, not just an assumption)
 
@@ -107,7 +118,7 @@ Granular milestones and to-dos underneath the phase table in [project-charter.md
 **Milestone: the public repo reads like a finished, professional project to someone who's never seen it.**
 
 - [ ] README polish — 60-second explanation, links to live Tableau + Streamlit, architecture diagram embedded or linked
-- [ ] Confirm all ADRs are current (0001, 0002, plus any written along the way — Phase 5's threshold-tuning decisions probably deserve one)
+- [ ] Confirm all ADRs are current (0001, 0002, 0003, plus any written along the way — Phase 5's threshold-tuning decisions probably deserve one)
 - [ ] Clean commit history check — no secrets in any past commit (`git log -p` spot check or a secret-scanning tool), no "wip" commits left unsquashed if that matters to the final presentation
 - [ ] Short write-up / blog post: what the project does, why the public/private split exists, what the math methodology is — this doubles as proof of the "why," not just the "what" (charter Definition of Done)
 - [ ] Final pass: does every claim in the README actually work if a stranger clicks it right now?

@@ -39,7 +39,7 @@ Today, deciding whether to buy or add to a position is ad hoc — checking a han
 3. **Compare** — Given 2–5 user-selected tickers, produce an ad hoc, sector-normalized side-by-side comparison — no persistence needed, safe to expose publicly.
 4. **Provide context** — Layer in sector rotation analysis to explain *why* a stock may be moving against its peers.
 5. **Deliver reliability** — Build the platform with idempotent pipelines, automated testing, and scheduled refreshes so insights are current and trustworthy.
-6. **Showcase craft** — Document every architectural decision, publish the generic code openly, and produce a portfolio piece — secondary to objective 1–3, but free as a byproduct of building this properly.
+6. **Showcase craft** — A layered, tested, typed codebase with a real API behind it (not just pipelines feeding a dashboard) — document every architectural decision, publish the generic code openly, and produce a portfolio piece that shows software engineering as well as data engineering. Secondary to objectives 1–3, but free as a byproduct of building this properly.
 
 ---
 
@@ -110,12 +110,16 @@ The project is considered complete and successful when **all** of the following 
 | Ingestion | `yfinance`, `fredapi` | Free, reliable, well-maintained libraries |
 | Storage | Supabase (PostgreSQL) | Free tier, permanent, cloud-hosted, SQL standard |
 | Transformation | dbt Core | Industry standard for SQL-based modeling |
-| Testing | dbt tests + `pytest` | Coverage at both data and code layers |
+| Application architecture | Layered: `domain` / `repositories` / `services` / `api` | Separates business logic from data access from HTTP — testable in isolation; see [docs/architecture.md](docs/architecture.md) §3 and [ADR 0003](docs/adr/0003-layered-architecture-and-api.md) |
+| Backend API | FastAPI + Pydantic | Real HTTP service (not just scripts), typed request/response schemas, free interactive docs at `/docs` |
+| Type checking | `mypy` | Catches a class of bugs before runtime, standard on production Python services |
+| Testing | `pytest` + `pytest-cov` + dbt tests | Unit (domain/services, no I/O) + integration (API, repositories) + data-quality layers |
 | Orchestration | GitHub Actions | Free for public repos, scheduled cron, built into version control |
 | Machine Learning | scikit-learn | Mature, well-documented, sufficient for our methods |
 | Notebooks | Jupyter | Standard for exploratory work, versioned in repo |
 | BI Dashboard | Tableau Public | New skill, free, public URL for portfolio |
-| Interactive App | Streamlit + Streamlit Community Cloud | Live Python-driven app, free hosting |
+| Interactive App | Streamlit + Streamlit Community Cloud | Thin API client, free hosting — no direct DB access, no business logic |
+| API hosting | Render or Fly.io (free tier) — decided in Phase 6 | Needs to be reachable over HTTPS by the private Monitor job, not just co-located with Streamlit |
 | Version Control | Git + GitHub | Public repo for portfolio visibility |
 | Documentation | Markdown + dbt docs | Lives alongside code, version-controlled |
 
