@@ -14,9 +14,9 @@ Granular milestones and to-dos underneath the phase table in [project-charter.md
 - [x] Write ADR 0002 — public/private repo split
 - [x] Write this roadmap
 - [x] Decide layered architecture (`domain` / `repositories` / `services` / `api`) + FastAPI backend — `docs/architecture.md` §3, [ADR 0003](adr/0003-layered-architecture-and-api.md) — so the project demonstrates software engineering, not just data engineering
-- [ ] Sanity-check the math methodology against 3–5 real S&P 500 stocks by hand (spreadsheet, not code) — confirm the robust z-score formula produces numbers that match intuition; these hand-checked values become the pinned test cases for `tests/unit/domain/` in Phase 5, not a throwaway check
-- [ ] Decide final list of valuation metrics for v1 (P/E, P/B, EV/EBITDA, P/S proposed in architecture.md — confirm or trim)
-- [ ] Confirm GICS sector classification source (yfinance's `sector`/`industry` fields — verify coverage/accuracy for all ~500 tickers before relying on it)
+- [x] Sanity-check the math methodology against real S&P 500 stocks (19 tickers, 3 sectors, live `yfinance` data — see `docs/architecture.md` §2.6) — found and fixed a real issue: added a ±4 clip to the composite score after AAPL's inflated P/B alone skewed it. These values become the basis for pinned tests in `tests/unit/domain/` once re-verified at full sector size in Phase 5.
+- [x] Decide final list of valuation metrics for v1 — **keep all four (P/E, P/B, EV/EBITDA, P/S)**; sample coverage was 95–100% usable, no metric thin enough to cut
+- [x] Confirm GICS sector classification source — **do not use `yfinance`'s `sector` field**, it only matched official GICS sector names 32% of the time in testing. Use a dedicated reference table instead — see [ADR 0004](adr/0004-sector-classification-source.md)
 
 ---
 
@@ -42,7 +42,9 @@ Granular milestones and to-dos underneath the phase table in [project-charter.md
 **Milestone: five years of real S&P 500 data sitting in bronze tables, refreshed daily.**
 
 - [ ] `src/ingestion/prices.py` — daily OHLCV for all ~500 tickers via `yfinance`, idempotent upsert (re-running a day must not duplicate rows)
-- [ ] `src/ingestion/fundamentals.py` — sector, industry, market cap, P/E, P/B, EV/EBITDA, P/S, EPS, dividend yield
+- [ ] `src/ingestion/fundamentals.py` — market cap, P/E, P/B, EV/EBITDA, P/S, EPS, dividend yield (no sector — see next item)
+- [ ] `src/ingestion/sector_reference.py` — pulls the S&P 500 constituent + GICS sector list (Wikipedia or equivalent), refreshed periodically rather than daily, per [ADR 0004](../docs/adr/0004-sector-classification-source.md). Validates row count is ~500 ± a few and fails loudly if not, rather than silently ingesting a broken scrape.
+- [ ] dbt test: every ticker in the fundamentals table has a non-null sector from the reference table — a gap here breaks Screen's entire cohort grouping silently if untested
 - [ ] `src/ingestion/macro.py` — 10Y Treasury, Fed Funds rate, CPI via `fredapi`
 - [ ] Backfill ~5 years of historical price data (one-time bulk load, separate from the daily incremental script)
 - [ ] Retry/backoff logic for `yfinance` rate limits (charter risk #1)
@@ -82,8 +84,8 @@ Granular milestones and to-dos underneath the phase table in [project-charter.md
 
 **Milestone: Screen produces a ranked, explainable shortlist; the math has been checked against reality; it's reachable over HTTP.**
 
-- [ ] Build `src/domain/` — `Stock`, `SectorCohort`, `ValuationScore`, `AnomalyResult` models + `ScoringEngine` implementing composite z-score (architecture.md §2.1). Zero I/O.
-- [ ] Unit tests (`tests/unit/domain/`) — the Phase 0 hand-checked values become permanent pinned test cases, not a throwaway spreadsheet exercise
+- [ ] Build `src/domain/` — `Stock`, `SectorCohort`, `ValuationScore`, `AnomalyResult` models + `ScoringEngine` implementing composite z-score **with the ±4 clip** (architecture.md §2.1, added after Phase 0 validation). Zero I/O.
+- [ ] Re-run the Phase 0 validation script at full sector size (all ~73 Information Technology stocks, not 7) to confirm the clip threshold and math still hold up outside a small sample; pin the results as permanent test cases in `tests/unit/domain/`
 - [ ] Implement per-sector Isolation Forest (architecture.md §2.2) inside `ScoringEngine`, `scikit-learn`, `contamination=0.1` starting point
 - [ ] Shortlist rule (architecture.md §2.3) — confirm every flagged stock carries its driving metric(s) in the output row
 - [ ] **Validation pass:** hand-pick 5–10 S&P 500 stocks Noah already has a strong opinion on (clearly overvalued, clearly cheap, clearly unremarkable) and confirm the model's output roughly agrees — this is the check against charter risk "composite score doesn't feel actionable"
@@ -118,7 +120,7 @@ Granular milestones and to-dos underneath the phase table in [project-charter.md
 **Milestone: the public repo reads like a finished, professional project to someone who's never seen it.**
 
 - [ ] README polish — 60-second explanation, links to live Tableau + Streamlit, architecture diagram embedded or linked
-- [ ] Confirm all ADRs are current (0001, 0002, 0003, plus any written along the way — Phase 5's threshold-tuning decisions probably deserve one)
+- [ ] Confirm all ADRs are current (0001, 0002, 0003, 0004, plus any written along the way — Phase 5's threshold-tuning decisions probably deserve one)
 - [ ] Clean commit history check — no secrets in any past commit (`git log -p` spot check or a secret-scanning tool), no "wip" commits left unsquashed if that matters to the final presentation
 - [ ] Short write-up / blog post: what the project does, why the public/private split exists, what the math methodology is — this doubles as proof of the "why," not just the "what" (charter Definition of Done)
 - [ ] Final pass: does every claim in the README actually work if a stranger clicks it right now?

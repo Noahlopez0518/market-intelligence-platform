@@ -1,0 +1,20 @@
+ticker,expected_sector,yf_sector,yf_industry,wiki_sector,trailingPE,priceToBook,evToEbitda,priceToSales
+AAPL,Information Technology,Technology,Consumer Electronics,Information Technology,36.12142,42.845108,27.531,9.858402
+MSFT,Information Technology,Technology,Software - Infrastructure,Information Technology,27.420523,8.254008,19.063,11.001628
+NVDA,Information Technology,Technology,Semiconductors,Information Technology,28.312658,23.586418,26.665,17.826712
+ORCL,Information Technology,Technology,Software - Infrastructure,Information Technology,27.723843,12.394939,19.893,6.911985
+CSCO,Information Technology,Technology,Communication Equipment,Information Technology,32.861862,8.58746,23.962,6.813064
+ADBE,Information Technology,Technology,Software - Application,Information Technology,14.588438,8.828766,10.562,4.020432
+INTC,Information Technology,Technology,Semiconductors,Information Technology,,6.120168,33.984,9.84703
+JNJ,Health Care,Healthcare,Drug Manufacturers - General,Health Care,31.019745,7.569436,19.268,6.5724726
+PFE,Health Care,Healthcare,Drug Manufacturers - General,Health Care,36.55263,1.8584427,8.29,2.4858224
+UNH,Health Care,Healthcare,Healthcare Plans,Health Care,25.27717,3.6133149,15.073,0.7831038
+ABBV,Health Care,Healthcare,Drug Manufacturers - General,Health Care,71.07932,-74.69783,16.505,6.886395
+MRK,Health Care,Healthcare,Drug Manufacturers - General,Health Care,118.024,8.685388,14.229,5.4677377
+LLY,Health Care,Healthcare,Drug Manufacturers - General,Health Care,37.7505,29.582916,25.128,12.583843
+NEE,Utilities,Utilities,Utilities - Regulated Electric,Utilities,18.573034,3.017745,19.924,6.0071816
+DUK,Utilities,Utilities,Utilities - Regulated Electric,Utilities,18.137049,1.7467294,11.345,2.862529
+SO,Utilities,Utilities,Utilities - Regulated Electric,Utilities,21.286745,2.5681725,12.519,3.3673437
+AEP,Utilities,Utilities,Utilities - Regulated Electric,Utilities,21.606586,2.1155968,13.512,2.9779308
+ED,Utilities,Utilities,Utilities - Regulated Electric,Utilities,17.679276,1.5463738,10.809,2.247322
+EXC,Utilities,Utilities,Utilities - Regulated Electric,Utilities,16.066177,1.5189433,11.486,1.7777027

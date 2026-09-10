@@ -9,8 +9,9 @@ Companion to [project-charter.md](../project-charter.md). This is where the "how
 ```mermaid
 flowchart TD
     subgraph Sources["External Sources"]
-        YF[Yahoo Finance]
-        FRED[FRED API]
+        YF[Yahoo Finance<br/>prices + fundamentals]
+        FRED[FRED API<br/>macro indicators]
+        WIKI[S&P 500 constituent list<br/>GICS sector reference — ADR 0004]
     end
 
     subgraph PublicRepo["PUBLIC REPO — market-intelligence-platform"]
@@ -34,6 +35,7 @@ flowchart TD
 
     YF --> ING
     FRED --> ING
+    WIKI -.refreshed periodically, not daily.-> ING
     ING --> BRONZE --> SILVER --> GOLD
     GOLD --> REPO --> SVC
     DOMAIN --> SVC
@@ -58,6 +60,8 @@ flowchart TD
 
 ## 2. Math methodology
 
+**This section was hand-validated against real data before any code was written** — see [Section 2.6](#26-validation-against-real-data-phase-0) for what that check found and changed.
+
 ### 2.1 Sector-relative valuation gap (the Screen z-score)
 
 Naive z-scores using mean/std break on valuation metrics because they're skewed and sometimes undefined (a company with negative earnings has no meaningful P/E). Use a **robust z-score** based on median and MAD (median absolute deviation) instead:
@@ -71,11 +75,14 @@ z(i, m) = (x(i, m) - median_s(m)) / (1.4826 * MAD_s(m))
 - `1.4826` scales MAD to be comparable to a standard deviation under a normal distribution, so `|z| > 2` means roughly the same thing it would with a conventional z-score
 - If `x(i, m)` is undefined or negative in a way that makes the metric meaningless (e.g. negative P/E), that metric is excluded for that stock — never coerced to zero or dropped silently without a note in the output
 
-**Composite valuation-gap score:** equal-weighted average of the available metric z-scores for that stock (configurable weights later, not at launch — no reason to guess at weights before there's evidence they matter):
+**Composite valuation-gap score:** equal-weighted average of the available metric z-scores for that stock, **each first clipped (winsorized) to ±4** so one distorted metric can't single-handedly drive the composite:
 
 ```
-composite(i) = mean( z(i, m) for m in available_metrics(i) )
+z_clipped(i, m) = clip( z(i, m), -4, 4 )
+composite(i)    = mean( z_clipped(i, m) for m in available_metrics(i) )
 ```
+
+The clip was added after hand-validation (Section 2.6) showed AAPL's price-to-book z-score alone (~+8.5, from an asset-light balance sheet after years of buybacks — not really "expensive," just structurally low book equity) was enough to push its composite to +2.77 even though its P/E, EV/EBITDA, and P/S were unremarkable. Clipping caps any single metric's influence without excluding it entirely — the metric still counts, it just can't dominate. Metric weights beyond equal-weighting stay unconfigured at launch — no reason to guess at weights before there's evidence they matter.
 
 Positive composite = trading rich vs. sector peers on average; negative = cheap vs. peers. This is descriptive, not a verdict.
 
@@ -107,6 +114,19 @@ Thresholds are config, not hardcoded — they'll need tuning once there's real o
 ### 2.5 Compare
 
 Pure query-time computation, no persistence: for 2–5 user-selected tickers, pull `composite(i)`, `anomaly_score(i)`, and the underlying metrics + their sector percentile rank, render side by side. Because it only ever touches tickers the user types in during that session, it's public-safe by construction — nothing here needs to be private.
+
+### 2.6 Validation against real data (Phase 0)
+
+Before writing any application code, the formulas above were run by hand against real `yfinance` data for 19 real S&P 500 tickers across three sectors (Information Technology, Health Care, Utilities). Script: [notebooks/phase0_validation.py](../notebooks/phase0_validation.py). Raw output: [docs/validation/](validation/) (constituent snapshot, raw sample, computed z-scores). Two things changed as a direct result:
+
+1. **The composite score got a ±4 clip** (Section 2.1) after AAPL's inflated P/B alone produced an outsized composite despite unremarkable P/E/EV-EBITDA/P/S — see above.
+2. **Sector classification source changed** — see [ADR 0004](adr/0004-sector-classification-source.md). `yfinance`'s own `sector` field only matched the official GICS sector name for 6 of 19 sampled tickers (32%) — it uses a coarser, differently-named taxonomy ("Technology" vs. GICS's "Information Technology," "Healthcare" vs. "Health Care"). Sector cohorts are the entire basis of the Screen z-score, so getting this wrong silently would have produced confidently-wrong output. Sector now comes from a dedicated reference table, not a per-ticker API field.
+
+What held up without changes:
+- **Excluding undefined metrics worked correctly** — ABBV's negative book value (-$74.70) correctly dropped out of its P/B z-score rather than producing a nonsense value.
+- **Metric coverage was high enough to keep all four metrics**: in the sample, P/E and P/B were each ~95% usable, EV/EBITDA and P/S were 100% usable. No metric is thin enough to justify dropping from v1.
+
+What's still a known limitation, not yet fixed: sector sample sizes in this validation were small (6–7 tickers per sector) purely because hand-checking 500 stocks isn't a Phase 0 activity. A sector's MAD computed from 6 stocks is noisier than one computed from the ~30–80 stocks each real GICS sector actually has (Utilities has 31, Information Technology has 73 per the Wikipedia constituent list) — the production numbers in Phase 3/5 will be more stable than this validation run's, not less.
 
 ---
 
