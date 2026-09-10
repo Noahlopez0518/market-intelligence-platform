@@ -12,9 +12,9 @@
 
 ## 1. Project Summary
 
-The Market Intelligence Platform is an end-to-end data engineering and analytics system that ingests daily U.S. equity market data, transforms it through a modern medallion architecture, applies statistical models to detect mispriced stocks within their sectors, and surfaces insights through interactive dashboards.
+The Market Intelligence Platform is a personal decision-support tool, built for one real user (Noah), backed by a properly engineered system: daily U.S. equity market data flows through a medallion architecture into a layered application — domain logic, data access, services, and a real FastAPI backend — that powers three features: **Screen** (sector-relative mispricing), **Compare** (side-by-side candidates), and **Monitor** (private watchlist alerting).
 
-The project demonstrates the complete data lifecycle — ingestion, modeling, orchestration, testing, machine learning, and visualization — built to professional standards on a fully free and publicly accessible technology stack.
+The project demonstrates the complete lifecycle on both sides of the stack: data engineering (ingestion, modeling, orchestration, testing, machine learning) *and* software engineering (layered architecture, a typed and tested API, a clean public/private security boundary) — built to professional standards on a fully free and publicly accessible technology stack.
 
 ---
 
@@ -53,7 +53,7 @@ The platform exists to answer three questions on demand:
 >
 > **Compare:** "Of these specific stocks I'm considering, which is priced better relative to its own peers?"
 
-Screen and Compare are answered by the public Streamlit app and Tableau dashboard. Monitor is answered privately — see [Section 5](#5-scope) and [docs/architecture.md](docs/architecture.md#security--the-publicprivate-split).
+Screen and Compare are answered by the public Streamlit app and Tableau dashboard, both calling the public FastAPI backend. Monitor is answered privately — see [Section 5](#5-scope) and [docs/architecture.md](docs/architecture.md#4-security--the-publicprivate-split).
 
 ---
 
@@ -99,6 +99,7 @@ The project is considered complete and successful when **all** of the following 
 | 6 | Documentation is complete | Every component has a written explanation of *what* it does and *why* it was chosen |
 | 7 | Monitor works for its one real user | Noah can add a ticker to his private watchlist and receive a private email alert when it changes meaningfully |
 | 8 | Public/private boundary holds | Zero watchlist tickers, alert content, or personal holdings ever appear in the public repo, its commit history, or public Action logs |
+| 9 | Software engineering, not just data engineering | FastAPI backend live with working `/docs`; `mypy` and `ruff` clean in CI; unit tests cover `src/domain` and `src/services` with no I/O, integration tests cover the API and repositories |
 
 ---
 
@@ -130,43 +131,27 @@ The project is considered complete and successful when **all** of the following 
 Quick-reference diagram below; the full flowchart (with the public/private split), the math methodology behind Screen/Monitor/Compare, and the security design live in **[docs/architecture.md](docs/architecture.md)**.
 
 ```
-┌─────────────────────┐
-│  External Sources   │
-│  • Yahoo Finance    │
-│  • FRED (macro)     │
-└──────────┬──────────┘
+External Sources (Yahoo Finance, FRED)
            │
            ▼
-┌─────────────────────┐
-│   Python Ingestion  │  ← GitHub Actions (scheduled daily)
-│   (extract + load)  │
-└──────────┬──────────┘
+  Python Ingestion  ← GitHub Actions, scheduled daily
            │
            ▼
-┌─────────────────────┐
-│  Bronze (raw)       │
-│  Supabase Postgres  │
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────────┐
-│  Silver (cleaned)   │  ← dbt staging + intermediate models
-│  Supabase Postgres  │
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────────┐
-│  Gold (analytics)   │  ← dbt marts + ML predictions
-│  Supabase Postgres  │
-└──────────┬──────────┘
-           │
-           ├──────────────┬─────────────────┐
-           ▼              ▼                 ▼
-   ┌──────────────┐  ┌──────────┐   ┌─────────────┐
-   │   Tableau    │  │ Streamlit│   │  Jupyter    │
-   │   Public     │  │   App    │   │  Notebooks  │
-   └──────────────┘  └──────────┘   └─────────────┘
+  Bronze (raw) → Silver (cleaned, dbt) → Gold (marts, dbt + ML scores)
+           │                                        │
+           ▼                                        ▼
+      Tableau                          Repository → Domain/Scoring → Service
+   (reads Gold directly)                            │
+                                                      ▼
+                                          FastAPI backend (/screen /compare /score)
+                                                      │
+                                            ┌─────────┴─────────┐
+                                            ▼                   ▼
+                                   Streamlit App        Private Monitor job
+                                  (thin API client)    (external repo, calls /score)
 ```
+
+Tableau is the one exception that reads Gold directly rather than through the API — BI tools are expected to query data directly, there's no code layer to put behind a service boundary there. Everything else — including the private Monitor job — reaches data only through the API. Full diagram with the public/private split: [docs/architecture.md](docs/architecture.md) §1.
 
 ---
 
@@ -179,10 +164,10 @@ See [docs/roadmap.md](docs/roadmap.md) for the granular milestone- and task-leve
 | **0. Planning** | Sep 9 – Sep 16 | Charter, architecture doc, math methodology, roadmap, flowchart, ADRs |
 | **1. Infrastructure** | Sep 17 – Sep 23 | Supabase (public schema + private schema) + GitHub + Python env operational |
 | **2. Ingestion (Bronze)** | Sep 24 – Oct 7 | Python ingestion scripts, raw data flowing, watchlist table created |
-| **3. Modeling (Silver/Gold)** | Oct 8 – Oct 21 | dbt project with full test coverage, composite valuation-gap marts |
-| **4. Orchestration** | Oct 22 – Oct 28 | Scheduled GitHub Actions, pipeline monitoring, private watchlist-monitor job |
-| **5. Data Science** | Oct 29 – Nov 11 | z-score + isolation forest models, validated against hand-picked known examples |
-| **6. Visualization** | Nov 12 – Nov 22 | Tableau + public Streamlit (Screen, Compare) live; private companion repo for Monitor alerts |
+| **3. Modeling (Silver/Gold)** | Oct 8 – Oct 21 | dbt project with full test coverage, composite valuation-gap marts, `src/repositories` layer |
+| **4. Orchestration** | Oct 22 – Oct 28 | Scheduled GitHub Actions, pipeline monitoring; private watchlist-monitor job *designed* (built Phase 6) |
+| **5. Data Science + API** | Oct 29 – Nov 11 | z-score + isolation forest in `src/domain`, validated against hand-picked known examples; `src/services` + FastAPI backend live |
+| **6. Visualization** | Nov 12 – Nov 22 | API hosted; Tableau + public Streamlit (Screen, Compare, both API clients) live; private companion repo built for Monitor |
 | **7. Showcase** | Nov 23 – Nov 27 | README polish, architecture diagram, blog post |
 
 ---
@@ -197,8 +182,9 @@ See [docs/roadmap.md](docs/roadmap.md) for the granular milestone- and task-leve
 | Tableau learning curve slows Phase 6 | Medium | Low | Allocate buffer week; YouTube tutorials in advance |
 | ML model produces noisy or unconvincing results | Medium | High | Use multiple methods (z-score + isolation forest); validate against known historical anomalies |
 | Composite score doesn't feel actionable for a real personal buy decision | Medium | High | Validate against a small hand-picked set of stocks Noah already has a strong opinion on before trusting the output; treat as directional, not authoritative |
-| Personal watchlist/alert data leaks into the public repo (commits, Action logs, public issues) | Medium | High | Hard split: private data lives only in Noah's own Supabase schema + a private companion repo for alerting; public repo never references specific tickers Noah is tracking — see [ADR 0002](docs/adr/0002-public-demo-vs-private-personal-data.md) |
+| Personal watchlist/alert data leaks into the public repo (commits, Action logs, public issues) | Medium | High | Hard split: private data lives only in a private companion repo (just the watchlist table + last-seen scores, no market-data DB creds needed there at all); public repo never references specific tickers Noah is tracking — see [ADR 0002](docs/adr/0002-public-demo-vs-private-personal-data.md) and [ADR 0003](docs/adr/0003-layered-architecture-and-api.md) |
 | Scope grew (Monitor + Compare added) without extending the timeline | High | Medium | Target completion moved from Nov 23 to Nov 27; phase gates still strict, v2 backlog absorbs anything further |
+| Free-tier API hosting (Render/Fly.io) adds cold-start latency or downtime that delays Monitor's daily check | Medium | Low | Monitor tolerates a delayed/failed check (retries next scheduled run); not on the critical path for anything time-sensitive since this project explicitly excludes real-time data |
 
 ---
 
